@@ -1,693 +1,608 @@
-from fastapi import FastAPI, Query, Response, status
+from fastapi import FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel, Field
- 
+from typing import Optional
+
 app = FastAPI()
- 
-# ══ PYDANTIC MODELS ═══════════════════════════════════════════════
- 
-class OrderRequest(BaseModel):
-    customer_name:    str = Field(..., min_length=2, max_length=100)
-    product_id:       int = Field(..., gt=0)
-    quantity:         int = Field(..., gt=0, le=100)
-    delivery_address: str = Field(..., min_length=10)
- 
-class NewProduct(BaseModel):
-    name:     str  = Field(..., min_length=2, max_length=100)
-    price:    int  = Field(..., gt=0)
-    category: str  = Field(..., min_length=2)
-    in_stock: bool = True
- 
-# ══ DATA ══════════════════════════════════════════════════════════
- 
-products = [
-    {'id': 1, 'name': 'Wireless Mouse', 'price': 499, 'category': 'Electronics', 'in_stock': True},
-    {'id': 2, 'name': 'Notebook',       'price':  99, 'category': 'Stationery',  'in_stock': True},
-    {'id': 3, 'name': 'USB Hub',        'price': 799, 'category': 'Electronics', 'in_stock': False},
-    {'id': 4, 'name': 'Pen Set',        'price':  49, 'category': 'Stationery',  'in_stock': True},
-]
- 
-orders        = []
-order_counter = 1
- 
-# ══ HELPER FUNCTIONS ══════════════════════════════════════════════
- 
-def find_product(product_id: int):
-    for p in products:
-        if p['id'] == product_id:
-            return p
-    return None
- 
-def calculate_total(product: dict, quantity: int) -> int:
-    return product['price'] * quantity
- 
-def filter_products_logic(category=None, min_price=None,
-                          max_price=None, in_stock=None):
-    result = products
-    if category  is not None:
-        result = [p for p in result if p['category'] == category]
-    if min_price is not None:
-        result = [p for p in result if p['price'] >= min_price]
-    if max_price is not None:
-        result = [p for p in result if p['price'] <= max_price]
-    if in_stock  is not None:
-        result = [p for p in result if p['in_stock'] == in_stock]
-    return result
- 
-# ══ ENDPOINTS ═════════════════════════════════════════════════════
- 
-@app.get('/')
+
+@app.get("/")
 def home():
-    return {'message': 'Welcome to our E-commerce API'}
- 
-@app.get('/products')
-def get_all_products():
-    return {'products': products, 'total': len(products)}
- 
-# ── FILTER ────────────────────────────────────────────────────────
- 
-@app.get('/products/filter')
-def filter_products(
-    category:  str  = Query(None, description='Electronics or Stationery'),
-    min_price: int  = Query(None, description='Minimum price'),
-    max_price: int  = Query(None, description='Maximum price'),
-    in_stock:  bool = Query(None, description='True = in stock only'),
-):
-    result = filter_products_logic(category, min_price, max_price, in_stock)
-    return {'filtered_products': result, 'count': len(result)}
- 
-# ── COMPARE ───────────────────────────────────────────────────────
- 
-@app.get('/products/compare')
-def compare_products(
-    product_id_1: int = Query(...),
-    product_id_2: int = Query(...),
-):
-    p1 = find_product(product_id_1)
-    p2 = find_product(product_id_2)
- 
-    if not p1:
-        return {'error': f'Product {product_id_1} not found'}
-    if not p2:
-        return {'error': f'Product {product_id_2} not found'}
- 
-    cheaper = p1 if p1['price'] < p2['price'] else p2
- 
+    return {"message": "Welcome to SpeedRide Car Rentals"}
+
+
+
+cars = [
+    {"id": 1, "model": "Swift", "brand": "Maruti", "type": "Hatchback", "price_per_day": 1500, "fuel_type": "Petrol", "is_available": True},
+    {"id": 2, "model": "City", "brand": "Honda", "type": "Sedan", "price_per_day": 2500, "fuel_type": "Petrol", "is_available": True},
+    {"id": 3, "model": "Creta", "brand": "Hyundai", "type": "SUV", "price_per_day": 3000, "fuel_type": "Diesel", "is_available": True},
+    {"id": 4, "model": "Fortuner", "brand": "Toyota", "type": "Luxury", "price_per_day": 6000, "fuel_type": "Diesel", "is_available": False},
+    {"id": 5, "model": "Nexon", "brand": "Tata", "type": "SUV", "price_per_day": 2800, "fuel_type": "Electric", "is_available": True},
+    {"id": 6, "model": "i20", "brand": "Hyundai", "type": "Hatchback", "price_per_day": 1800, "fuel_type": "Petrol", "is_available": True},
+    {"id": 7, "model": "M430D Competition", "brand": "BMW", "type": "Luxury", "price_per_day": 7000, "fuel_type": "Diesel", "is_available": True},
+    {"id": 8, "model": "Audi RS5", "brand": "Audi", "type": "Hatchback", "price_per_day": 5000, "fuel_type": "Petrol", "is_available": True},
+    {"id": 9, "model": "XUV700", "brand": "Mahindra", "type": "SUV", "price_per_day": 4000, "fuel_type": "Diesel", "is_available": False},
+    {"id": 10, "model": "Seltos", "brand": "kia", "type": "Hatchback", "price_per_day": 3000, "fuel_type": "Petrol", "is_available": True},]
+
+
+# -------------------- Q3: GET ALL CARS --------------------
+
+@app.get("/cars")
+def get_cars():
+    available = len([c for c in cars if c["is_available"]])
+    return {"total": len(cars), "available_count": available, "cars": cars}
+
+
+# -------------------- Q5: SUMMARY --------------------
+
+@app.get("/cars/summary")
+def cars_summary():
+    total = len(cars)
+    available = len([c for c in cars if c["is_available"]])
+
+    type_count = {}
+    fuel_count = {}
+
+    for car in cars:
+        type_count[car["type"]] = type_count.get(car["type"], 0) + 1
+        fuel_count[car["fuel_type"]] = fuel_count.get(car["fuel_type"], 0) + 1
+
+    cheapest = min(cars, key=lambda x: x["price_per_day"])
+    expensive = max(cars, key=lambda x: x["price_per_day"])
+
     return {
-        'product_1': p1,
-        'product_2': p2,
-        'better_value': cheaper['name'],
-        'price_diff': abs(p1['price'] - p2['price']),
+        "total_cars": total,
+        "available_count": available,
+        "type_breakdown": type_count,
+        "fuel_type_breakdown": fuel_count,
+        "most_expensive_car": expensive,
+        "cheapest_car": cheapest,
+        
     }
- 
-# ── ADD PRODUCT ───────────────────────────────────────────────────
- 
-@app.post('/products')
-def add_product(new_product: NewProduct, response: Response):
- 
-    existing_names = [p['name'].lower() for p in products]
- 
-    if new_product.name.lower() in existing_names:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return {'error': 'Product with this name already exists'}
- 
-    next_id = max(p['id'] for p in products) + 1
- 
-    product = {
-        'id': next_id,
-        'name': new_product.name,
-        'price': new_product.price,
-        'category': new_product.category,
-        'in_stock': new_product.in_stock,
-    }
- 
-    products.append(product)
- 
-    response.status_code = status.HTTP_201_CREATED
- 
-    return {'message': 'Product added', 'product': product}
- 
-# ── AUDIT ─────────────────────────────────────────────────────────
- 
-@app.get("/products/audit")
-def audit_products():
- 
-    total_products = len(products)
- 
-    in_stock_products = [p for p in products if p["in_stock"]]
- 
-    in_stock_count = len(in_stock_products)
- 
-    out_of_stock_names = [p["name"] for p in products if not p["in_stock"]]
- 
-    total_stock_value = sum(p["price"] * 10 for p in in_stock_products)
- 
-    most_expensive = max(products, key=lambda x: x["price"])
- 
-    return {
-        "total_products": total_products,
-        "in_stock_count": in_stock_count,
-        "out_of_stock_names": out_of_stock_names,
-        "total_stock_value": total_stock_value,
-        "most_expensive": {
-            "name": most_expensive["name"],
-            "price": most_expensive["price"]
-        }
-    }
- # ── BONUS DISCOUNT (MUST BE ABOVE {product_id}) ───────────────────
- 
-@app.put("/products/discount")
-def apply_discount(category: str, discount_percent: int):
- 
-    updated_products = []
- 
-    for p in products:
- 
-        if p["category"].lower() == category.lower():
- 
-            discount_amount = (p["price"] * discount_percent) / 100
- 
-            p["price"] = int(p["price"] - discount_amount)
- 
-            updated_products.append({
-                "name": p["name"],
-                "new_price": p["price"]
-            })
- 
-    if not updated_products:
-        return {"message": "No products found in this category"}
- 
-    return {
-        "category": category,
-        "discount_applied": f"{discount_percent}%",
-        "updated_count": len(updated_products),
-        "products": updated_products
-    }
- 
-# ── UPDATE PRODUCT ────────────────────────────────────────────────
- 
-@app.put('/products/{product_id}')
-def update_product(
-    product_id: int,
-    response: Response,
-    in_stock: bool = Query(None),
-    price: int = Query(None),
+
+# -------------------- Q10: FILTER --------------------
+
+
+@app.get("/cars/filter")
+def filter_cars(type: Optional[str] = None, brand: Optional[str] = None,
+                fuel_type: Optional[str] = None, max_price: Optional[int] = None,
+                is_available: Optional[bool] = None):
+    result = cars
+
+    if type:
+        result = [c for c in result if c["type"].lower() == type.lower()]
+    if brand:
+        result = [c for c in result if c["brand"].lower() == brand.lower()]
+    if fuel_type:
+        result = [c for c in result if c["fuel_type"].lower() == fuel_type.lower()]
+    if max_price:
+        result = [c for c in result if c["price_per_day"] <= max_price]
+    if is_available is not None:
+        result = [c for c in result if c["is_available"] == is_available]
+
+    return {"cars": result, "count": len(result)}
+
+@app.get("/cars/sort")
+def sort_cars(
+    sort_by: str = "price_per_day",
+    order: str = "asc"
 ):
- 
-    product = find_product(product_id)
- 
-    if not product:
-        response.status_code = status.HTTP_404_NOT_FOUND
-        return {'error': 'Product not found'}
- 
-    if in_stock is not None:
-        product['in_stock'] = in_stock
- 
-    if price is not None:
-        product['price'] = price
- 
-    return {'message': 'Product updated', 'product': product}
- 
-# ── DELETE PRODUCT ────────────────────────────────────────────────
- 
-@app.delete('/products/{product_id}')
-def delete_product(product_id: int, response: Response):
- 
-    product = find_product(product_id)
- 
-    if not product:
-        response.status_code = status.HTTP_404_NOT_FOUND
-        return {'error': 'Product not found'}
- 
-    products.remove(product)
- 
-    return {'message': f"Product '{product['name']}' deleted"}
- 
-# ── GET SINGLE PRODUCT ────────────────────────────────────────────
- 
-@app.get('/products/{product_id}')
-def get_product(product_id: int):
- 
-    product = find_product(product_id)
- 
-    if not product:
-        return {'error': 'Product not found'}
- 
-    return {'product': product}
- 
-# ── PLACE ORDER ───────────────────────────────────────────────────
- 
-@app.post('/orders')
-def place_order(order_data: OrderRequest):
- 
-    global order_counter
- 
-    product = find_product(order_data.product_id)
- 
-    if not product:
-        return {'error': 'Product not found'}
- 
-    if not product['in_stock']:
-        return {'error': f"{product['name']} is out of stock"}
- 
-    total = calculate_total(product, order_data.quantity)
- 
-    order = {
-        'order_id': order_counter,
-        'customer_name': order_data.customer_name,
-        'product': product['name'],
-        'quantity': order_data.quantity,
-        'delivery_address': order_data.delivery_address,
-        'total_price': total,
-        'status': 'confirmed',
-    }
- 
-    orders.append(order)
- 
-    order_counter += 1
- 
-    return {'message': 'Order placed successfully', 'order': order}
- 
-@app.get('/orders')
-def get_all_orders():
-    return {'orders': orders, 'total_orders': len(orders)}
+  
+    allowed_fields = ["price_per_day", "brand", "type"]
 
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-
-app = FastAPI()
-
-# -------------------------------
-# PRODUCTS DATABASE
-# -------------------------------
-products = [
-    {"id": 1, "name": "Wireless Mouse", "price": 499, "in_stock": True},
-    {"id": 2, "name": "Notebook", "price": 99, "in_stock": True},
-    {"id": 3, "name": "USB Hub", "price": 299, "in_stock": False},
-    {"id": 4, "name": "Pen Set", "price": 49, "in_stock": True},
-]
-
-# -------------------------------
-# CART + ORDERS
-# -------------------------------
-cart = []
-orders = []
-order_counter = 1
-
-
-# -------------------------------
-# MODELS
-# -------------------------------
-class CheckoutRequest(BaseModel):
-    customer_name: str = Field(..., min_length=2)
-    delivery_address: str = Field(..., min_length=10)
-
-
-# -------------------------------
-# HELPER FUNCTION
-# -------------------------------
-def calculate_total(product, quantity):
-    return product["price"] * quantity
-
-
-# -------------------------------
-# ADD TO CART
-# -------------------------------
-@app.post("/cart/add")
-def add_to_cart(product_id: int, quantity: int = 1):
-
-    # find product
-    product = None
-    for p in products:
-        if p["id"] == product_id:
-            product = p
-            break
-
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
-    # check stock
-    if not product["in_stock"]:
+    if sort_by not in allowed_fields:
         raise HTTPException(
             status_code=400,
-            detail=f"{product['name']} is out of stock"
+            detail=f"Invalid sort_by. Allowed: {allowed_fields}"
         )
 
-    # check if already in cart
-    for item in cart:
-        if item["product_id"] == product_id:
-            item["quantity"] += quantity
-            item["subtotal"] = calculate_total(product, item["quantity"])
-
-            return {
-                "message": "Cart updated",
-                "cart_item": item
-            }
-
-    # new item
-    subtotal = calculate_total(product, quantity)
-
-    cart_item = {
-        "product_id": product["id"],
-        "product_name": product["name"],
-        "quantity": quantity,
-        "unit_price": product["price"],
-        "subtotal": subtotal
-    }
-
-    cart.append(cart_item)
-
-    return {
-        "message": "Added to cart",
-        "cart_item": cart_item
-    }
-
-
-# -------------------------------
-# VIEW CART
-# -------------------------------
-@app.get("/cart")
-def view_cart():
-
-    if not cart:
-        return {"message": "Cart is empty & Add items"}
-
-    grand_total = sum(item["subtotal"] for item in cart)
-
-    return {
-        "items": cart,
-        "item_count": len(cart),
-        "grand_total": grand_total
-    }
-
-
-# -------------------------------
-# REMOVE FROM CART
-# -------------------------------
-@app.delete("/cart/{product_id}")
-def remove_from_cart(product_id: int):
-
-    for item in cart:
-        if item["product_id"] == product_id:
-            cart.remove(item)
-
-            return {
-                "message": "Item removed from cart",
-                "removed_item": item
-            }
-
-    raise HTTPException(status_code=404, detail="Item not found in cart")
-
-
-# -------------------------------
-# CHECKOUT
-# -------------------------------
-@app.post("/cart/checkout")
-def checkout(data: CheckoutRequest):
-
-    global order_counter
-
-    if not cart:
+    if order not in ["asc", "desc"]:
         raise HTTPException(
             status_code=400,
-            detail="Cart is empty — add items first"
+            detail="order must be 'asc' or 'desc'"
         )
 
-    created_orders = []
-    grand_total = 0
+    reverse = True if order == "desc" else False
 
-    for item in cart:
-        order = {
-            "order_id": order_counter,
-            "customer_name": data.customer_name,
-            "delivery_address": data.delivery_address,
-            "product": item["product_name"],
-            "quantity": item["quantity"],
-            "total_price": item["subtotal"]
-        }
-
-        orders.append(order)
-        created_orders.append(order)
-
-        grand_total += item["subtotal"]
-        order_counter += 1
-
-    cart.clear()
-
-    return {
-        "message": "Checkout successful",
-        "orders_placed": created_orders,
-        "grand_total": grand_total
-    }
-
-
-# -------------------------------
-# VIEW ORDERS
-# -------------------------------
-@app.get("/orders")
-def get_orders():
-
-    return {
-        "orders": orders,
-        "total_orders": len(orders)
-    }
-
-
-
-
-
-
-
-
-
-
-
-from fastapi import FastAPI, Query
-
-app = FastAPI()
-
-# -------------------------------
-# SAMPLE DATA
-# -------------------------------
-
-products = [
-    {"id": 1, "name": "Wireless Mouse", "price": 499, "category": "Electronics"},
-    {"id": 2, "name": "Notebook", "price": 99, "category": "Stationery"},
-    {"id": 3, "name": "USB Hub", "price": 799, "category": "Electronics"},
-    {"id": 4, "name": "Pen Set", "price": 49, "category": "Stationery"},
-]
-
-orders = []
-order_counter = 1
-
-# -------------------------------
-# PRODUCTS APIs (DAY 6)
-# -------------------------------
-
-# SEARCH PRODUCTS
-@app.get("/products/search")
-def search_products(keyword: str = Query(...)):
-    results = [
-        p for p in products
-        if keyword.lower() in p["name"].lower()
-    ]
-
-    if not results:
-        return {"message": f"No products found for: {keyword}"}
-
-    return {
-        "keyword": keyword,
-        "total_found": len(results),
-        "products": results
-    }
-
-
-#  SORT PRODUCTS
-@app.get("/products/sort")
-def sort_products(
-    sort_by: str = Query("price"),
-    order: str = Query("asc")
-):
-    if sort_by not in ["price", "name"]:
-        return {"error": "sort_by must be 'price' or 'name'"}
-
-    reverse = (order == "desc")
-
-    sorted_products = sorted(
-        products,
-        key=lambda p: p[sort_by],
-        reverse=reverse
-    )
+    sorted_cars = sorted(cars, key=lambda x: x[sort_by], reverse=reverse)
 
     return {
         "sort_by": sort_by,
         "order": order,
-        "products": sorted_products
+        "total": len(sorted_cars),
+        "cars": sorted_cars
     }
+@app.get("/cars/page")
+def paginate_cars(page: int = 1, limit: int = 3):
 
 
-#  PAGINATION
-@app.get("/products/page")
-def paginate_products(
-    page: int = Query(1, ge=1),
-    limit: int = Query(2, ge=1)
-):
-    start = (page - 1) * limit
-    paginated = products[start:start + limit]
-
-    return {
-        "page": page,
-        "limit": limit,
-        "total": len(products),
-        "total_pages": -(-len(products) // limit),
-        "products": paginated
-    }
-
-
-# -------------------------------
-# NEW ENDPOINTS (Q4, Q5, Q6)
-# IMPORTANT: Place ABOVE /products/{product_id}
-# -------------------------------
-
-#  Q5: SORT BY CATEGORY THEN PRICE
-@app.get("/products/sort-by-category")
-def sort_by_category():
-    result = sorted(products, key=lambda p: (p["category"], p["price"]))
-    return {
-        "products": result,
-        "total": len(result)
-    }
-
-
-#  Q6: COMBINED SEARCH + SORT + PAGINATION
-@app.get("/products/browse")
-def browse_products(
-    keyword: str = Query(None),
-    sort_by: str = Query("price"),
-    order: str = Query("asc"),
-    page: int = Query(1, ge=1),
-    limit: int = Query(4, ge=1)
-):
-    result = products
-
-    # 1. SEARCH
-    if keyword:
-        result = [
-            p for p in result
-            if keyword.lower() in p["name"].lower()
-        ]
-
-    # 2. SORT
-    if sort_by in ["price", "name"]:
-        result = sorted(
-            result,
-            key=lambda p: p[sort_by],
-            reverse=(order == "desc")
+    if page < 1 or limit < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page and limit must be greater than 0"
         )
 
-    # 3. PAGINATION
-    total = len(result)
-    start = (page - 1) * limit
-    paged = result[start:start + limit]
+    total = len(cars)
 
-    return {
-        "keyword": keyword,
-        "sort_by": sort_by,
-        "order": order,
-        "page": page,
-        "limit": limit,
-        "total_found": total,
-        "total_pages": -(-total // limit),
-        "products": paged
-    }
-
-
-#  GET PRODUCT BY ID (KEEP LAST to avoid conflicts)
-@app.get("/products/{product_id}")
-def get_product(product_id: int):
-    for p in products:
-        if p["id"] == product_id:
-            return p
-    return {"error": "Product not found"}
-
-
-# -------------------------------
-# ORDERS APIs (DAY 5 + DAY 6)
-# -------------------------------
-
-#  CREATE ORDER
-@app.post("/orders")
-def create_order(customer_name: str):
-    global order_counter
-
-    order = {
-        "order_id": order_counter,
-        "customer_name": customer_name,
-        "status": "pending"
-    }
-
-    orders.append(order)
-    order_counter += 1
-
-    return {"message": "Order created", "order": order}
-
-
-#  GET ALL ORDERS
-@app.get("/orders")
-def get_orders():
-    return {"orders": orders}
-
-
-#  Q4: SEARCH ORDERS
-@app.get("/orders/search")
-def search_orders(customer_name: str = Query(...)):
-    results = [
-        o for o in orders
-        if customer_name.lower() in o["customer_name"].lower()
-    ]
-
-    if not results:
-        return {"message": f"No orders found for: {customer_name}"}
-
-    return {
-        "customer_name": customer_name,
-        "total_found": len(results),
-        "orders": results
-    }
-
-#  BONUS: PAGINATE ORDERS
-from fastapi import Query
-
-@app.get("/orders/page")
-def get_orders_page(
-    page: int = Query(1, ge=1),
-    limit: int = Query(3, ge=1)
-):
-    orders[0]["status"] = "Confirmed"
+    
     start = (page - 1) * limit
     end = start + limit
 
-    paginated_orders = orders[start:end]
+
+    if start >= total:
+        return {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "total_pages": (total + limit - 1) // limit,
+            "cars": []
+        }
 
     return {
         "page": page,
         "limit": limit,
-        "total_orders": len(orders),
-        "total_pages": -(-len(orders) // limit),  # ceil division
-        "orders": paginated_orders
+        "total": total,
+        "total_pages": (total + limit - 1) // limit,
+        "cars": cars[start:end]
     }
+# -------------------- Q4: RENTALS --------------------
+
+
+rentals = []
+rental_counter = 1
+
+@app.get("/rentals")
+def get_rentals():
+    return {"total": len(rentals), "rentals": rentals}
+
+
+# -------------------- Q6: MODEL --------------------
+
+class RentalRequest(BaseModel):
+    customer_name: str = Field(..., min_length=2)
+    car_id: int = Field(..., gt=0)
+    days: int = Field(..., gt=0, le=30)
+    license: str = Field(..., min_length=5)
+    driver_required: str = "Self"   # self or driver
+    insurance: bool = False
+
+
+# -------------------- HELPERS --------------------
+
+
+def find_car(car_id: int):
+    for car in cars:
+        if car["id"] == car_id:
+            return car
+    return None
+
+
+def calculate_rental_cost(price_per_day, days, insurance, driver_required):
+    base_cost = price_per_day * days
+
+    discount = 0
+    if days >= 15:
+        discount = 0.25 * base_cost
+    elif days >= 7:
+        discount = 0.15 * base_cost  
+
+    insurance_cost = 500 * days if insurance else 0
+
+
+    if driver_required == "Driver":
+        driver_cost = 800 * days
+    else:
+        driver_cost = 0
+
+    total = base_cost - discount + insurance_cost + driver_cost
+
+    return {
+        "base_cost": base_cost,
+        "discount": discount,
+        "insurance_cost": insurance_cost,
+        "driver_cost": driver_cost,
+        "total_cost": total
+    }
+
+
+# -------------------- CREATE RENTAL --------------------
+
+@app.post("/rentals")
+#def create_rental(request: RentalRequest):
+def create_rental(data: RentalRequest):
+    global rental_counter
+
+    #car = find_car(request.car_id)
+    car = find_car(data.car_id)
+
+    if not car:
+        raise HTTPException(status_code=404, detail="Car not found")
+
+    if not car["is_available"]:
+        raise HTTPException(status_code=400, detail="Car not available")
+
+    # mark unavailable
+    car["is_available"] = False
+
+    #cost = calculate_rental_cost(
+        #car["price_per_day"],
+        #request.days,
+        #request.insurance,
+        #request.driver_required)
+    cost = calculate_rental_cost(
+        car["price_per_day"],
+        data.days,
+        data.insurance,
+        data.driver_required)
+    
+
+    #rental = {
+        #"rental_id": rental_counter,
+        #"customer_name": request.customer_name,
+        #"license": request.license,
+        #"car_model": car["model"],
+        #"car_brand": car["brand"],
+        #"days": request.days,
+        #"insurance": request.insurance,
+        #"driver_required": request.driver_required,
+        #"driver_cost": cost["driver_cost"],
+        #"base_cost": cost["base_cost"],
+        #"discount": cost["discount"],
+        #"insurance_cost": cost["insurance_cost"],
+        #"total_cost": cost["total_cost"],
+        #"car_available": car["is_available"],
+        #"status": "active"}
+    rental = {
+        #"status": "Car Returned",
+        "rental_id": rental_counter,
+         "car_id": car["id"],
+        "customer_name": data.customer_name,
+        "license": data.license,
+        "car_model": car["model"],
+        "car_brand": car["brand"],
+        "days": data.days,
+        "insurance": data.insurance,
+        "driver_required": data.driver_required,
+        "driver_cost": cost["driver_cost"],
+        "base_cost": cost["base_cost"],
+        "discount": cost["discount"],
+        "insurance_cost": cost["insurance_cost"],
+        "total_cost": cost["total_cost"],
+        "car_available": car["is_available"],
+        "status": "active"}
+    
+
+    rentals.append(rental)
+    car["is_available"] = False
+    rental_counter += 1
+
+    return rental
+
+
+# -------------------- Q11: ADD CAR --------------------
+
+class NewCar(BaseModel):
+    model: str
+    brand: str
+    type: str
+    price_per_day: int
+    fuel_type: str
+    is_available: bool = True
+
+
+@app.post("/cars",status_code=201)
+def add_car(car: NewCar, response: Response):
+    for c in cars:
+        if c["model"].lower() == car.model.lower():
+            raise HTTPException(201, "Car already exists")
+
+    new = car.dict()
+    new["id"] = len(cars) + 1
+    cars.append(new)
+
+    response.status_code = 201
+    return new
+
+
+# -------------------- Q12: UPDATE --------------------
+
+@app.put("/cars/{car_id}")
+def update_car(car_id: int, price_per_day: int = None, is_available: bool = None):
+    car = find_car(car_id)
+
+    if not car:
+        raise HTTPException(status_code=404, detail="Car not found")
+
+    if price_per_day is not None:
+        car["price_per_day"] = price_per_day
+
+    if is_available is not None:
+        car["is_available"] = is_available
+
+    return car
+
+
+
+# -------------------- Q13: DELETE --------------------
+
+@app.delete("/cars/{car_id}")
+def delete_car(car_id: int):
+
+    #car = next((c for c in cars if c["id"] == car_id), None)
+    car = find_car(car_id)
+
+
+    if not car:
+        raise HTTPException(status_code=404, detail="Car not found")
+
+    for r in rentals:
+        if r.get("car_id") == car_id and r.get("status") == "active":
+            raise HTTPException(
+                status_code=400,
+                detail="CannoT Delete Car is Rented in active status"
+            )
+
+    cars.remove(car)
+
+    #return {"message": "Deleted", "car": car["model"]}
+
+    return {"message": "Deleted", "car": car["model"]}
+
+
+# -------------------- Q14: CART --------------------
+
+
+cart = []
+def find_rental(rental_id: int):
+    for r in rentals:
+        if r["rental_id"] == rental_id:
+            return r
+    return None
+@app.post("/return/{rental_id}")
+def return_car(rental_id: int):
+
+    rental = find_rental(rental_id)
+
+    if rental is None:
+        raise HTTPException(status_code=404, detail="Rental not found")
+
+  
+    if "status" not in rental:
+        raise HTTPException(status_code=500, detail="Invalid rental data")
+
+    if rental["status"] == "returned":
+        raise HTTPException(status_code=400, detail="Car already returned")
+
+    car_id = rental.get("car_id")
+    if car_id is None:
+        raise HTTPException(
+            status_code=500,
+            detail="car_id missing in rental (fix rental creation)"
+        )
+
+    car = find_car(car_id)
+
+    if car is None:
+        raise HTTPException(status_code=404, detail="Car not found")
+
+   
+    rental["status"] = "Car Returned"
+    car["is_available"] = True
+    rental["car_available"] = True
+
+    return rental
+
+
+# -------------------- Q15: CHECKOUT -------------------
+
+
+@app.get("/rentals/active")
+def get_active_rentals():
+    active = [r for r in rentals if r.get("status") == "active"]
+    return {
+        "total": len(active),
+        "rentals": active
+    }
+@app.get("/rentals/by-car/{car_id}")
+def rentals_by_car(car_id: int):
+    car = find_car(car_id)
+
+    if not car:
+        raise HTTPException(status_code=404, detail="Car not found")
+
+    result = [r for r in rentals if r.get("car_id") == car_id]
+
+    return {
+        "car_id": car_id,
+        "total": len(result),
+        "rentals": result
+    }
+@app.get("/cars")
+def get_cars():
+    return {"total": len(cars), "cars": cars}
+
+
+@app.get("/cars/search")  
+def search_cars(keyword: str):
+    keyword = keyword.lower()
+
+    result = [
+        c for c in cars
+        if keyword in c["model"].lower()
+        or keyword in c["brand"].lower()
+        or keyword in c["type"].lower()
+    ]
+
+    return {
+        "keyword": keyword,
+        "total_found": len(result),
+        "cars": result
+    }
+@app.get("/cars/unavailable")
+def get_unavailable_cars():
+    result = [c for c in cars if not c["is_available"]]
+
+    return {
+        "total": len(result),
+        "cars": result
+    }
+
+    
+# -------------------- Q20: BROWSE --------------------
+
+@app.get("/cars/browse")
+def browse_cars(
+    keyword: Optional[str] = None,
+    type: Optional[str] = None,
+    fuel_type: Optional[str] = None,
+    max_price: Optional[int] = None,
+    is_available: Optional[bool] = None,
+    sort_by: str = "price_per_day",
+    order: str = "asc",
+    page: int = 1,
+    limit: int = 3
+):
+    result = cars
+    # -SEARCH 
+    if keyword:
+        k = keyword.lower()
+        result = [
+            c for c in result
+            if k in c["model"].lower()
+            or k in c["brand"].lower()
+            or k in c["type"].lower()
+        ]
+
+    # Filter
+
+
+    if type:
+        result = [c for c in result if c["type"].lower() == type.lower()]
+
+    if fuel_type:
+        result = [c for c in result if c["fuel_type"].lower() == fuel_type.lower()]
+
+    if max_price:
+        result = [c for c in result if c["price_per_day"] <= max_price]
+
+    if is_available is not None:
+        result = [c for c in result if c["is_available"] == is_available]
+
+    
+    # ----------------Sort----------------
+    
+    allowed_sort = ["price_per_day", "brand", "type"]
+
+    if sort_by not in allowed_sort:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid sort_by. Allowed: {allowed_sort}"
+        )
+
+    if order not in ["asc", "desc"]:
+        raise HTTPException(
+            status_code=400,
+            detail="order must be 'asc' or 'desc'"
+        )
+
+    reverse = order == "desc"
+    result = sorted(result, key=lambda x: x[sort_by], reverse=reverse)
+
+
+
+    # ----------------Pagination FOr Car ----------------
+
+
+    if page < 1 or limit < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page and limit must be greater than 0"
+        )
+
+    total = len(result)
+    start = (page - 1) * limit
+    end = start + limit
+
+    paginated = result[start:end]    
+    return {
+        "sorting": {
+            "sort_by": sort_by,
+            "order": order,
+            "Page":page,
+            "Total_Page":total,
+            "Limit":limit
+        },
+        "cars": paginated}
+
+    
+# -------------------- Q19: RENTAL SEARCH --------------------
+
+@app.get("/rentals/search")
+def search_rentals(name: str):
+    keyword = name.lower()
+
+    result = [
+        r for r in rentals
+        if keyword in r["customer_name"].lower()
+    ]
+
+    return {
+        "keyword": name,
+        "total_found": len(result),
+        "rentals": result
+    }
+
+@app.get("/rentals/sort")
+def sort_rentals(
+    sort_by: str = "total_cost",
+    order: str = "asc"
+):
+    allowed = ["total_cost", "days"]
+
+    if sort_by not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid sort_by. Allowed: {allowed}"
+        )
+
+    if order not in ["asc", "desc"]:
+        raise HTTPException(
+            status_code=400,
+            detail="order must be 'asc' or 'desc'"
+        )
+
+    reverse = order == "desc"
+
+    sorted_list = sorted(rentals, key=lambda x: x[sort_by], reverse=reverse)
+
+    return {
+        "sort_by": sort_by,
+        "order": order,
+        "total": len(sorted_list),
+        "rentals": sorted_list
+    }
+
+@app.get("/rentals/page")
+def paginate_rentals(page: int = 1, limit: int = 3):
+
+    if page < 1 or limit < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page and limit must be greater than 0"
+        )
+
+    total = len(rentals)
+    start = (page - 1) * limit
+    end = start + limit
+
+    return {
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "total_pages": (total + limit - 1) // limit,
+        "rentals": rentals[start:end]
+    }
+@app.get("/cars/{car_id}")
+def get_car(car_id: int):
+    car = next((c for c in cars if c["id"] == car_id), None)
+    if not car:
+        raise HTTPException(status_code=404, detail="Car not found")
+    return car
