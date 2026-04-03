@@ -384,7 +384,7 @@ trainer = Trainer(
 
 # Train
 trainer.train()
-
+I Got 94% of accuracy
 # Evaluate
 exp2 = trainer.evaluate(test_dataset)
 print("Experiment 2 (Last 2 Layers):", exp2)
